@@ -1,0 +1,45 @@
+- name: Configure server for setup
+  hosts: all
+  become: yes
+  tasks:
+    - name: Disable ssh pass auth
+      ansible.builtin.lineinfile:
+        path: "/etc/ssh/sshd_config"
+        regexp: "^(#)?PasswordAuthentication"
+        line: "PasswordAuthentication no"
+        state: present
+      notify:
+        - restart ssh
+
+    - name: Update cache and install docker
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+        state: present
+        update_cache: yes
+    - name: Ensure docker running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Create docker folder
+      ansible.builtin.file:
+        path: /opt/webserver
+        state: directory
+        mode: '0755'
+    - name: Copy dockercompose file to server
+      ansible.builtin.copy:
+        src: docker-compose.yml
+        dest: /opt/webserver/docker-compose.yml
+    - name: Start docker compose file
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: /opt/webserver
+
+  handlers:
+    - name: restart ssh
+      ansible.builtin.service:
+        name: ssh
+        state: restarted

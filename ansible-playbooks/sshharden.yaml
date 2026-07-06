@@ -1,0 +1,44 @@
+- name: Create new user, and disable root login
+  hosts: all
+  become: yes
+  vars_prompt:
+    - name: "user_password"
+      prompt: "enter user password:"
+      private: yes
+      encrypt: "sha512_crypt" #ansible requires password to be encrypted
+  vars:
+    new_user: "aaron"
+    ssh_key_path: "/home/aaron/.ssh/id_rsa.pub"
+  tasks:
+    - name: Create user
+      user:
+        name: "{{ new_user }}"
+        shell: /bin/bash
+        groups: sudo
+        append: yes
+        password: "{{ user_password }}"
+    - name: Make sure .ssh directory exists
+      file:
+        path: "/home/{{ new_user }}/.ssh"
+        state: directory
+        owner: "{{ new_user }}"
+        group: "{{ new_user }}"
+        mode: '0700'
+    - name: Copy ssh key to new users directory
+      copy:
+        content: "{{ lookup('file', ssh_key_path) }}"
+        dest: "/home/{{ new_user }}/.ssh/authorized_keys"
+        owner: "{{ new_user }}"
+        group: "{{ new_user }}"
+        mode: '0600'
+    - name: Disable root login in sshd_config
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^(#)?PermitRootLogin'
+        line: 'PermitRootLogin no'
+      notify: restart ssh
+  handlers:
+    - name: restart ssh
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
